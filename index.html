@@ -1,16 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-  <!-- (Existing head content) -->
-  <!-- Bootstrap CSS -->
+  <meta charset="UTF-8">
+  <title>T-Shirt Customizer</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <!-- Bootstrap Icons -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
-  <!-- Google Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.2.4/fabric.min.js" integrity="sha512-...=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <style>
-    /* CSS Variables for Theming */
     :root {
       --bg-color: #f8f9fa;
       --text-color: #343a40;
@@ -19,8 +17,15 @@
       --input-bg: #fff;
       --input-border: #ced4da;
       --placeholder-color: #6c757d;
+      --primary-color: #0d6efd;
+      --primary-hover: #0b5ed7;
+      --badge-color: #ffc107;
     }
-
+    /* Gradient Scrollbar Thumb */
+    #controls::-webkit-scrollbar-thumb {
+      background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+      border-radius: 6px;
+    }
     [data-theme="dark"] {
       --bg-color: #212529;
       --text-color: #f8f9fa;
@@ -30,330 +35,378 @@
       --input-border: #495057;
       --placeholder-color: #adb5bd;
     }
-
     body {
       font-family: 'Poppins', sans-serif;
       margin: 0;
       padding: 0;
-      display: flex;
       height: 100vh;
       overflow: hidden;
       background-color: var(--bg-color);
       color: var(--text-color);
+      display: flex;
+      flex-direction: column;
     }
-
+    #toggleControlsBtn {
+      position: fixed;
+      top: 15px;
+      left: 15px;
+      z-index: 1060;
+      background-color: var(--primary-color);
+      border: none;
+      color: #fff;
+      padding: 8px 12px;
+      border-radius: 5px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .main-container {
+      flex: 1;
+      display: flex;
+      height: 100%;
+    }
     #controls {
-      width: 300px;
+      flex: 0 0 350px;
+      /* Increased width from 300px to 350px */
       background: var(--card-bg);
-      padding: 15px;
+      padding: 25px;
       box-shadow: 2px 0 8px var(--card-shadow);
       overflow-y: auto;
-      transition: width 0.3s ease;
+      transition: transform 0.3s ease;
       border-radius: 10px;
     }
-
+    @media (max-width: 768px) {
+      #controls {
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 100%;
+        width: 85%;
+        transform: translateX(-100%);
+        z-index: 1050;
+        padding: 20px;
+      }
+      #controls.show {
+        transform: translateX(0);
+      }
+    }
     #model-container {
-      flex-grow: 1;
-      position: relative;
-      background: var(--bg-color);
+      flex: 1;
       display: flex;
       align-items: center;
       justify-content: center;
+      background: var(--bg-color);
+      overflow: hidden;
+      /* Changed from auto to hidden for a more compact view */
+      position: relative;
+      padding: 20px;
     }
-
+    #propertiesPanel {
+      flex: 0 0 250px;
+      background: var(--card-bg);
+      padding: 20px;
+      box-shadow: -2px 0 8px var(--card-shadow);
+      overflow-y: auto;
+      display: none;
+    }
+    @media (min-width: 769px) {
+      #propertiesPanel {
+        display: block;
+      }
+    }
     h4 {
-      color: var(--text-color);
-      font-size: 18px;
-      margin-bottom: 15px;
+      font-size: 1.25rem;
+      margin-bottom: 25px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
     }
-
-    .form-group {
-      margin-bottom: 10px;
-    }
-
     label {
-      font-weight: 600;
-      color: var(--text-color);
-      font-size: 14px;
+      font-weight: 500;
+      font-size: 0.9rem;
     }
-
+    .form-group {
+      margin-bottom: 25px;
+    }
     .btn {
-      transition: background-color 0.3s, transform 0.2s;
       border-radius: 5px;
       padding: 8px 12px;
-      font-size: 14px;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      gap: 5px;
     }
-
-    .btn:hover {
-      transform: translateY(-2px);
+    .btn-primary {
+      background-color: var(--primary-color);
+      border: none;
+      width: 100%;
     }
-
+    .btn-primary:hover {
+      background-color: var(--primary-hover);
+    }
     input,
     select,
     textarea {
       border-radius: 5px;
       background-color: var(--input-bg);
-      border-color: var(--input-border);
+      border: 1px solid var(--input-border);
       color: var(--text-color);
+      font-size: 1rem;
     }
-
     input::placeholder,
     textarea::placeholder {
       color: var(--placeholder-color);
     }
-
     #animateBtn {
-      background-color: #0d6efd;
+      background-color: var(--primary-color);
       border: none;
-      border-radius: 5px;
       padding: 10px 15px;
-      font-size: 14px;
+      font-size: 0.9rem;
       width: 100%;
-      margin-top: 10px;
+      margin-top: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
     }
-
     #animateBtn:hover {
-      background-color: #0b5ed7;
+      background-color: var(--primary-hover);
     }
-
     #editorCanvas {
       border: 2px dashed var(--input-border);
       border-radius: 8px;
       cursor: pointer;
       background-color: var(--input-bg);
       width: 100%;
+      max-width: 300px;
+      /* Increased max-width from 280px to 300px */
+      margin: 0 auto;
       height: auto;
+      aspect-ratio: 300 / 400;
+      /* Updated aspect ratio for larger size */
     }
-
     #controls::-webkit-scrollbar {
-      width: 8px;
+      width: 6px;
     }
-
     #controls::-webkit-scrollbar-thumb {
       background-color: rgba(0, 0, 0, 0.1);
-      border-radius: 4px;
+      border-radius: 3px;
     }
-
     #controls::-webkit-scrollbar-thumb:hover {
       background-color: rgba(0, 0, 0, 0.2);
     }
-
     .toast-container {
       z-index: 1055;
     }
-
-    .toast.fade.in.show {
+    .toast.show {
       animation: slideIn 0.5s forwards;
     }
-
     @keyframes slideIn {
       from {
         transform: translateX(100%);
         opacity: 0;
       }
-
       to {
         transform: translateX(0);
         opacity: 1;
       }
     }
-
-    .toast.hide.out {
+    .toast.hide {
       animation: slideOut 0.5s forwards;
     }
-
     @keyframes slideOut {
       from {
         transform: translateX(0);
         opacity: 1;
       }
-
       to {
         transform: translateX(100%);
         opacity: 0;
       }
     }
-
-    #propertiesPanel {
-      width: 300px;
-      background: var(--card-bg);
-      padding: 20px;
-      box-shadow: -2px 0 8px var(--card-shadow);
-      overflow-y: auto;
-    }
-
-    @media(max-width:768px) {
-      #controls {
-        width: 100%;
-        position: absolute;
-        height: 100%;
-        z-index: 1040;
-        transform: translateX(-100%);
-        transition: transform 0.3s ease;
-      }
-
-      #controls.show {
-        transform: translateX(0);
-      }
-
-      #propertiesPanel {
-        display: none;
-      }
-
-      #toggleControlsBtn {
-        position: absolute;
-        top: 15px;
-        left: 15px;
-        z-index: 1060;
-      }
-    }
-
-    /* Pro Badge Style */
-    #proBadge {
-      font-size: 12px;
+    #proBadge,
+    #addTextPro {
+      font-size: 0.75rem;
       vertical-align: middle;
+    }
+    #mesh2DCanvas {
+      width: 100%;
+      max-width: 250px;
+      height: auto;
+      border: 1px solid #ccc;
+      background-color: var(--bg-color);
+      border-radius: 8px;
+      margin: 20px auto;
+      display: block;
+    }
+    body {
+      font-size: 16px;
+    }
+    h4 {
+      font-size: 1.25rem;
+    }
+    @media (max-width: 768px) {
+      body {
+        font-size: 14px;
+      }
+      h4 {
+        font-size: 1rem;
+      }
+    }
+    .btn:focus,
+    input:focus,
+    select:focus,
+    textarea:focus {
+      outline: 2px solid var(--primary-color);
+      outline-offset: 2px;
+    }
+    #uvMapOverlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      opacity: 0.3;
+      display: none;
+    }
+    #uvMapOverlay.active {
+      display: block;
     }
   </style>
 </head>
-
 <body>
-  <!-- Toggle Button for Mobile View -->
-  <button class="btn btn-secondary d-md-none" id="toggleControlsBtn" type="button">
+  <button class="d-md-none" id="toggleControlsBtn" type="button">
     <i class="bi bi-sliders"></i> Customize
   </button>
-  <!-- Sidebar Controls -->
-  <div id="controls" class="collapse d-md-block">
-    <h4>
-      Customize Your T-Shirt
-      <span id="proBadge" class="badge bg-success ms-2" style="display: none;">Pro</span>
-    </h4>
-    <!-- Theme Mode Toggle -->
-    <div class="form-group">
-      <label for="modeToggle"><i class="bi bi-moon-stars me-2"></i>Theme Mode</label>
-      <select id="modeToggle" class="form-select">
-        <option value="system">System</option>
-        <option value="time">Auto (Time-based)</option>
-        <option value="light">Light</option>
-        <option value="dark">Dark</option>
-      </select>
-    </div>
-    <!-- Change Color -->
-    <div class="form-group">
-      <label for="colorPicker"><i class="bi bi-palette-fill me-2"></i>Change T-Shirt Color</label>
-      <input type="color" id="colorPicker" class="form-control form-control-color" value="#ffffff"
-        title="Choose your T-shirt color">
-    </div>
-    <!-- Add Text -->
-    <div class="form-group">
-      <label for="textInput"><i class="bi bi-type me-2"></i>Add Text to T-Shirt</label>
-      <input type="text" id="textInput" class="form-control" placeholder="Enter your text"
-        title="Enter text to add to T-shirt">
-      <div class="mt-2">
-        <label for="fontSize" class="form-label">Font Size</label>
-        <input type="range" id="fontSize" class="form-range" min="10" max="100" value="30" title="Adjust font size">
+  <div class="main-container">
+    <div id="controls" class="shadow-lg">
+      <h4>
+        Customize Your T-Shirt
+        <span id="proBadge" class="badge bg-success" style="display: none;">Pro</span>
+      </h4>
+      <div class="form-group">
+        <label for="modeToggle"><i class="bi bi-moon-stars me-2"></i>Theme Mode</label>
+        <select id="modeToggle" class="form-select" aria-label="Theme Mode">
+          <option value="system">System</option>
+          <option value="time">Auto (Time-based)</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
       </div>
-      <button id="addTextBtn" class="btn btn-success w-100 mt-2">
-        <i class="bi bi-plus-circle me-2"></i>Add Text
-        <span id="addTextPro" class="badge bg-warning text-dark ms-2" style="display: none;">Pro</span>
+      <div class="form-group">
+        <label for="colorPicker"><i class="bi bi-palette-fill me-2"></i>T-Shirt Color</label>
+        <input type="color" id="colorPicker" class="form-control form-control-color" value="#ffffff"
+          title="Choose color" aria-label="Choose T-Shirt Color">
+      </div>
+      <div class="form-group">
+        <label for="textInput"><i class="bi bi-type me-2"></i>Add Text</label>
+        <input type="text" id="textInput" class="form-control" placeholder="Enter text" title="Enter text"
+          aria-label="Enter Text">
+        <div class="mt-2">
+          <label for="fontSize" class="form-label">Font Size</label>
+          <input type="range" id="fontSize" class="form-range" min="10" max="100" value="30" title="Adjust font size"
+            aria-label="Adjust Font Size">
+        </div>
+        <button id="addTextBtn" class="btn btn-success mt-2 w-100" aria-label="Add Text">
+          <i class="bi bi-plus-circle me-2"></i>Add Text
+          <span id="addTextPro" class="badge bg-warning text-dark ms-2" style="display: none;">Pro</span>
+        </button>
+      </div>
+      <div class="form-group">
+        <label for="imageUpload"><i class="bi bi-image-fill me-2"></i>Upload Image</label>
+        <input type="file" id="imageUpload" class="form-control" accept="image/*" title="Upload image"
+          aria-label="Upload Image">
+        <button id="addImageBtn" class="btn btn-success mt-2 w-100" aria-label="Add Image">
+          <i class="bi bi-plus-circle me-2"></i>Add Image
+        </button>
+      </div>
+      <div class="form-group">
+        <label><i class="bi bi-grid-3x3-gap-fill me-2"></i>Position Elements</label>
+        <div class="position-relative">
+          <canvas id="editorCanvas" width="300" height="400" aria-label="Editor Canvas"></canvas>
+          <img src="src/uv_map.png" alt="UV Map Overlay" id="uvMapOverlay">
+        </div>
+        <small class="text-muted">Drag texts and images to position them.</small>
+      </div>
+      <div class="form-group">
+        <label class="form-label"><i class="bi bi-tools me-2"></i>View Settings</label>
+        <div class="form-check form-switch mb-3">
+          <input class="form-check-input" type="checkbox" id="toggleWireframe" aria-label="Toggle Wireframe Mode">
+          <label class="form-check-label" for="toggleWireframe">Wireframe</label>
+        </div>
+        <div class="form-check form-switch mb-3">
+          <input class="form-check-input" type="checkbox" id="toggleGrid" aria-label="Toggle Grid">
+          <label class="form-check-label" for="toggleGrid">Grid</label>
+        </div>
+        <div class="form-check form-switch mb-3">
+          <input class="form-check-input" type="checkbox" id="toggleShadows" checked aria-label="Enable Shadows">
+          <label class="form-check-label" for="toggleShadows">Shadows</label>
+        </div>
+        <div class="form-check form-switch mb-3">
+          <input class="form-check-input" type="checkbox" id="toggleAmbientLight" checked aria-label="Ambient Light">
+          <label class="form-check-label" for="toggleAmbientLight">Ambient Light</label>
+        </div>
+        <div class="form-check form-switch mb-3">
+          <input class="form-check-input" type="checkbox" id="toggleDirectionalLight" checked
+            aria-label="Directional Light">
+          <label class="form-check-label" for="toggleDirectionalLight">Directional Light</label>
+        </div>
+        <div class="form-check form-switch mb-3">
+          <input class="form-check-input" type="checkbox" id="toggleSpotlights" checked aria-label="Spotlights">
+          <label class="form-check-label" for="toggleSpotlights">Spotlights</label>
+        </div>
+        <div class="form-check form-switch mb-3">
+          <input class="form-check-input" type="checkbox" id="toggleModelVisibility" checked
+            aria-label="Model Visibility">
+          <label class="form-check-label" for="toggleModelVisibility">Model Visibility</label>
+        </div>
+        <div class="form-check form-switch mb-3">
+          <input class="form-check-input" type="checkbox" id="toggleUVMapOverlay" aria-label="UV Map Overlay">
+          <label class="form-check-label" for="toggleUVMapOverlay">UV Map Overlay</label>
+        </div>
+      </div>
+      <button id="animateBtn" class="btn btn-primary" aria-label="Animate">
+        <i class="bi bi-play-circle me-2"></i>Animate
       </button>
     </div>
-    <!-- Upload Image -->
-    <div class="form-group">
-      <label for="imageUpload"><i class="bi bi-image-fill me-2"></i>Upload Image to T-Shirt</label>
-      <input type="file" id="imageUpload" class="form-control" accept="image/*" title="Upload an image file">
-      <button id="addImageBtn" class="btn btn-success w-100 mt-2">
-        <i class="bi bi-plus-circle me-2"></i>Add Image
-      </button>
+    <div id="model-container">
+      <!-- Your 3D model will be embedded here -->
+      <div id="threejs-container" style="width: 100%; height: 100%; max-width: 600px; max-height: 600px;"></div>
     </div>
-    <!-- Position Elements -->
-    <div class="form-group">
-      <label><i class="bi bi-grid-3x3-gap-fill me-2"></i>Position Elements</label>
-      <canvas id="editorCanvas" width="280" height="350"></canvas>
-      <small class="form-text text-muted">Drag texts and images to position them on the T-shirt.</small>
+    <div id="propertiesPanel" class="shadow-lg">
+      <h4>Properties</h4>
+      <ul id="textsList" class="list-group mb-3"></ul>
+      <ul id="imagesList" class="list-group mb-3"></ul>
+      <div id="editProperties">
+        <p>Select an element to edit its properties.</p>
+      </div>
+      <canvas id="mesh2DCanvas" width="250" height="250" aria-label="2D Mesh Canvas"></canvas>
     </div>
-    <!-- View Settings -->
-    <div class="form-group">
-      <label class="form-label"><i class="bi bi-tools me-2"></i>View Settings</label>
-      <div class="form-check form-switch mb-1">
-        <input class="form-check-input" type="checkbox" id="toggleWireframe">
-        <label class="form-check-label" for="toggleWireframe">Wireframe Mode</label>
-      </div>
-      <div class="form-check form-switch mb-1">
-        <input class="form-check-input" type="checkbox" id="toggleGrid">
-        <label class="form-check-label" for="toggleGrid">Show Grid</label>
-      </div>
-      <div class="form-check form-switch mb-1">
-        <input class="form-check-input" type="checkbox" id="toggleShadows" checked>
-        <label class="form-check-label" for="toggleShadows">Enable Shadows</label>
-      </div>
-      <div class="form-check form-switch mb-1">
-        <input class="form-check-input" type="checkbox" id="toggleAmbientLight" checked>
-        <label class="form-check-label" for="toggleAmbientLight">Ambient Light</label>
-      </div>
-      <div class="form-check form-switch mb-1">
-        <input class="form-check-input" type="checkbox" id="toggleDirectionalLight" checked>
-        <label class="form-check-label" for="toggleDirectionalLight">Directional Light</label>
-      </div>
-      <div class="form-check form-switch mb-1">
-        <input class="form-check-input" type="checkbox" id="toggleSpotlights" checked>
-        <label class="form-check-label" for="toggleSpotlights">Spotlights</label>
-      </div>
-      <div class="form-check form-switch mb-1">
-        <input class="form-check-input" type="checkbox" id="toggleModelVisibility" checked>
-        <label class="form-check-label" for="toggleModelVisibility">Model Visibility</label>
-      </div>
-
-    </div>
-    <!-- Animate Button -->
-    <button id="animateBtn" class="btn btn-primary">
-      <i class="bi bi-play-circle me-2"></i>Animate
-    </button>
   </div>
-  <!-- Model Container -->
-  <div id="model-container"></div>
-  <!-- Properties Panel -->
-  <div id="propertiesPanel">
-    <p>Select an element to edit its properties.</p>
-  </div>
-  <!-- Toast Container -->
   <div id="toastContainer" class="toast-container position-fixed top-0 end-0 p-3"></div>
-  <!-- Bootstrap JS Bundle -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-  <!-- Main JS Module -->
   <script type="module" src="/src/main.js"></script>
-  <!-- Theme Mode Script -->
   <script>
-    // Function to apply the selected theme
     const applyTheme = (theme) => {
       if (theme === 'system') {
         document.documentElement.removeAttribute('data-theme');
       } else if (theme === 'time') {
-        // Get current hour in user's local time
-        const currentHour = new Date().getHours();
-        if (currentHour >= 19 || currentHour < 7) {
-          // Between 7 PM and 7 AM
-          document.documentElement.setAttribute('data-theme', 'dark');
-        } else {
-          document.documentElement.setAttribute('data-theme', 'light');
-        }
+        const hour = new Date().getHours();
+        document.documentElement.setAttribute('data-theme', (hour >= 19 || hour < 7) ? 'dark' : 'light');
       } else {
         document.documentElement.setAttribute('data-theme', theme);
       }
     };
-    // Function to handle time-based theme switching
     const timeBasedTheme = () => {
       if (localStorage.getItem('theme') === 'time') {
         applyTheme('time');
       }
     };
-    // Get saved theme from localStorage or default to 'system'
     let savedTheme = localStorage.getItem('theme') || 'system';
     const modeToggle = document.getElementById('modeToggle');
-    if (modeToggle) {
-      modeToggle.value = savedTheme;
-    }
+    if (modeToggle) modeToggle.value = savedTheme;
     applyTheme(savedTheme);
-    // Event listener for the theme toggle dropdown
     if (modeToggle) {
       modeToggle.addEventListener('change', function () {
         let selectedTheme = this.value;
@@ -361,17 +414,13 @@
         applyTheme(selectedTheme);
       });
     }
-    // Listener for system preference changes
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
       if (localStorage.getItem('theme') === 'system') {
         applyTheme('system');
       }
     });
-    // Set an interval to check for time-based theme updates every 30 minutes
-    setInterval(timeBasedTheme, 1800000); // 30 minutes in milliseconds
-    // Initial call to handle time-based theme
+    setInterval(timeBasedTheme, 1800000);
     timeBasedTheme();
-    // Toggle Controls Script
     const toggleControlsBtn = document.getElementById('toggleControlsBtn');
     const controls = document.getElementById('controls');
     if (toggleControlsBtn && controls) {
@@ -379,7 +428,21 @@
         controls.classList.toggle('show');
       });
     }
+    const editorCanvas = document.getElementById('editorCanvas');
+    const mesh2DCanvas = document.getElementById('mesh2DCanvas');
+    function resizeCanvas() {
+      if (editorCanvas && editorCanvas.parentElement) {
+        editorCanvas.width = 300;
+        editorCanvas.height = 400;
+      }
+      if (mesh2DCanvas && mesh2DCanvas.parentElement) {
+        const width = mesh2DCanvas.parentElement.offsetWidth;
+        mesh2DCanvas.width = width;
+        mesh2DCanvas.height = width;
+      }
+    }
+    window.addEventListener('resize', resizeCanvas);
+    window.addEventListener('load', resizeCanvas);
   </script>
 </body>
-
 </html>

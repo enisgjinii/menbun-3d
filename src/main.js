@@ -1,24 +1,23 @@
-// src/main.js
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-
-// Configuration
 const CONFIG = {
-  MODEL_PATH: '/src/models/jersey.glb',
+  MODEL_PATH: 'src/models/jersey.glb',
   MAX_TEXTS: 4,
   MAX_IMAGES: 3,
   TEXTURE_SIZE: 1024,
-  EDITOR_SCALE_FACTOR: 3,
-  CAMERA: { FOV: 45, NEAR: 0.1, FAR: 1000, POSITION: { x: 0, y: 5, z: 10 } },
+  CAMERA: {
+    FOV: 45,
+    NEAR: 0.1,
+    FAR: 1000,
+    POSITION: { x: 0, y: 5, z: 10 },
+  },
   LIGHTING: {
     AMBIENT: { color: 0xffffff, intensity: 0.6 },
     DIRECTIONAL: { color: 0xffffff, intensity: 0.8, position: { x: 5, y: 10, z: 7.5 } },
     POINT: { color: 0xffffff, intensity: 0.5, position: { x: -5, y: 5, z: -5 } },
   },
 };
-
-// State Management
 const state = {
   scene: new THREE.Scene(),
   camera: null,
@@ -39,44 +38,36 @@ const state = {
   selectedItem: null,
   gridHelper: null,
   lights: {},
+  scene2D: new THREE.Scene(),
+  camera2D: null,
+  renderer2D: null,
+  controls2D: null,
+  mesh2D: null,
+  uvMapImage: null,
 };
-
-// Initialization
 const init = () => {
   state.modelContainer = document.getElementById('model-container');
-  if (!state.modelContainer) return showToast('Error', 'Model container not found!', 'danger');
-
-  // Renderer
+  if (!state.modelContainer) return;
   state.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   state.renderer.setSize(state.modelContainer.clientWidth, state.modelContainer.clientHeight);
   state.renderer.setPixelRatio(window.devicePixelRatio);
   state.renderer.shadowMap.enabled = true;
   state.modelContainer.appendChild(state.renderer.domElement);
-
-  // Camera
   const { FOV, NEAR, FAR, POSITION } = CONFIG.CAMERA;
   state.camera = new THREE.PerspectiveCamera(FOV, state.modelContainer.clientWidth / state.modelContainer.clientHeight, NEAR, FAR);
   state.camera.position.set(POSITION.x, POSITION.y, POSITION.z);
-
-  // Controls
   state.controls = new OrbitControls(state.camera, state.renderer.domElement);
   state.controls.enableDamping = true;
-
-  // Lighting
   const { AMBIENT, DIRECTIONAL, POINT } = CONFIG.LIGHTING;
   state.lights.ambient = new THREE.AmbientLight(AMBIENT.color, AMBIENT.intensity);
   state.scene.add(state.lights.ambient);
-
   state.lights.directional = new THREE.DirectionalLight(DIRECTIONAL.color, DIRECTIONAL.intensity);
   state.lights.directional.position.set(DIRECTIONAL.position.x, DIRECTIONAL.position.y, DIRECTIONAL.position.z);
   state.lights.directional.castShadow = true;
   state.scene.add(state.lights.directional);
-
   state.lights.point = new THREE.PointLight(POINT.color, POINT.intensity);
   state.lights.point.position.set(POINT.position.x, POINT.position.y, POINT.position.z);
   state.scene.add(state.lights.point);
-
-  // Texture
   state.textureCanvas = document.createElement('canvas');
   state.textureCanvas.width = CONFIG.TEXTURE_SIZE;
   state.textureCanvas.height = CONFIG.TEXTURE_SIZE;
@@ -84,29 +75,52 @@ const init = () => {
   state.textureCtx.fillStyle = '#ffffff';
   state.textureCtx.fillRect(0, 0, CONFIG.TEXTURE_SIZE, CONFIG.TEXTURE_SIZE);
   state.texture = new THREE.CanvasTexture(state.textureCanvas);
-
-  // Editor Canvas
   state.editorCanvas = document.getElementById('editorCanvas');
-  if (!state.editorCanvas) return showToast('Error', 'Editor canvas not found!', 'danger');
+  if (!state.editorCanvas) return;
   state.editorCtx = state.editorCanvas.getContext('2d');
-
-  // Load Model
+  loadUVMap();
   loadModel();
-
-  // Event Listeners
+  init2DMeshView();
   setupEventListeners();
-
-  // Animation Loop
   animate();
 };
-
-// Load T-Shirt Model
+const loadUVMap = () => {
+  const uvMapImage = new Image();
+  uvMapImage.src = 'src/models/UV.png';
+  uvMapImage.onload = () => {
+    state.uvMapImage = uvMapImage;
+    renderEditorCanvas();
+    updateAllCanvases();
+  };
+};
+const init2DMeshView = () => {
+  const mesh2DCanvas = document.getElementById('mesh2DCanvas');
+  if (!mesh2DCanvas) return;
+  state.renderer2D = new THREE.WebGLRenderer({ canvas: mesh2DCanvas, antialias: true, alpha: true });
+  state.renderer2D.setSize(mesh2DCanvas.clientWidth, mesh2DCanvas.clientHeight);
+  state.renderer2D.setPixelRatio(window.devicePixelRatio);
+  state.renderer2D.shadowMap.enabled = false;
+  const aspect = mesh2DCanvas.clientWidth / mesh2DCanvas.clientHeight;
+  state.camera2D = new THREE.OrthographicCamera(-50 * aspect, 50 * aspect, 50, -50, 1, 1000);
+  state.camera2D.position.set(0, 0, 100);
+  state.camera2D.lookAt(0, 0, 0);
+  state.controls2D = new OrbitControls(state.camera2D, state.renderer2D.domElement);
+  state.controls2D.enableRotate = false;
+  state.controls2D.enablePan = true;
+  state.controls2D.enableZoom = true;
+  const gridHelper2D = new THREE.GridHelper(100, 100);
+  gridHelper2D.rotation.x = Math.PI / 2;
+  gridHelper2D.material.opacity = 0.25;
+  gridHelper2D.material.transparent = true;
+  state.scene2D.add(gridHelper2D);
+  animate2D();
+};
 const loadModel = () => {
   new GLTFLoader().load(
     CONFIG.MODEL_PATH,
-    (gltf) => {
+    gltf => {
       state.tshirtModel = gltf.scene;
-      state.tshirtModel.traverse((child) => {
+      state.tshirtModel.traverse(child => {
         if (child.isMesh) {
           child.material.map = state.texture;
           child.material.needsUpdate = true;
@@ -115,78 +129,111 @@ const loadModel = () => {
         }
       });
       state.scene.add(state.tshirtModel);
+      if (state.mesh2D) state.scene2D.remove(state.mesh2D);
+      state.mesh2D = state.tshirtModel.clone();
+      state.mesh2D.traverse(child => {
+        if (child.isMesh) {
+          child.material = new THREE.MeshBasicMaterial({
+            map: child.material.map,
+            color: child.material.color,
+            transparent: child.material.transparent,
+            opacity: child.material.opacity,
+          });
+        }
+      });
+      state.scene2D.add(state.mesh2D);
       adjustCamera();
       updateAllCanvases();
     },
     undefined,
-    (error) => {
-      showToast('Error', 'Failed to load T-shirt model.', 'danger');
-      console.error(error);
+    error => {
+      console.error('Failed to load T-shirt model.', error);
     }
   );
 };
-
-// Adjust Camera to Fit Model
 const adjustCamera = () => {
   if (!state.tshirtModel) return;
   const box = new THREE.Box3().setFromObject(state.tshirtModel);
   const size = box.getSize(new THREE.Vector3());
   const center = box.getCenter(new THREE.Vector3());
-
   state.controls.target.copy(center);
   state.controls.update();
-
   state.camera.position.set(center.x, center.y + size.y, center.z + size.z * 2);
   state.camera.lookAt(center);
+  const maxDim = Math.max(size.x, size.y, size.z);
+  const aspect = state.renderer2D.domElement.clientWidth / state.renderer2D.domElement.clientHeight;
+  const viewSize = maxDim * 1.5;
+  state.camera2D.left = -viewSize * aspect;
+  state.camera2D.right = viewSize * aspect;
+  state.camera2D.top = viewSize;
+  state.camera2D.bottom = -viewSize;
+  state.camera2D.updateProjectionMatrix();
 };
-
-// Setup Event Listeners
 const setupEventListeners = () => {
-  // Color Picker
   state.colorPicker = document.getElementById('colorPicker');
   state.colorPicker?.addEventListener('input', updateAllCanvases);
-
-  // Add Text
   document.getElementById('addTextBtn')?.addEventListener('click', () => {
-    const text = document.getElementById('textInput')?.value;
-    const size = parseInt(document.getElementById('fontSize')?.value, 10);
-    addText(text, size);
+    const textInput = document.getElementById('textInput')?.value || '';
+    const size = parseInt(document.getElementById('fontSize')?.value, 10) || 30;
+    addText(textInput, size);
     document.getElementById('textInput').value = '';
   });
-
-  // Add Image
   document.getElementById('addImageBtn')?.addEventListener('click', () => {
     document.getElementById('imageUpload')?.click();
   });
-
-  document.getElementById('imageUpload')?.addEventListener('change', (e) => {
+  document.getElementById('imageUpload')?.addEventListener('change', e => {
     const file = e.target.files[0];
     if (file) addImage(file);
     e.target.value = '';
   });
-
-  // Animate Button
   document.getElementById('animateBtn')?.addEventListener('click', toggleAnimation);
-
-  // Window Resize
   window.addEventListener('resize', onWindowResize);
-
-  // Delete Key
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Delete' || e.key === 'Backspace') deleteSelectedItem();
-  });
-
-  // Editor Canvas Events
-  state.editorCanvas.addEventListener('mousedown', onCanvasMouseDown);
-  state.editorCanvas.addEventListener('mousemove', onCanvasMouseMove);
-  state.editorCanvas.addEventListener('mouseup', onCanvasMouseUp);
-  state.editorCanvas.addEventListener('mouseleave', onCanvasMouseUp);
-
-  // View Settings
+  document.addEventListener('keydown', e => (['Delete', 'Backspace'].includes(e.key) && deleteSelectedItem()));
+  if (state.editorCanvas) {
+    const canvas = state.editorCanvas;
+    canvas.addEventListener('mousedown', onCanvasMouseDown);
+    canvas.addEventListener('mousemove', onCanvasMouseMove);
+    canvas.addEventListener('mouseup', onCanvasMouseUp);
+    canvas.addEventListener('mouseleave', onCanvasMouseUp);
+    canvas.addEventListener('mousemove', e => {
+      const rect = canvas.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+      const scaleX = state.textureCanvas.width / canvas.width;
+      const scaleY = state.textureCanvas.height / canvas.height;
+      const texX = mouseX * scaleX;
+      const texY = mouseY * scaleY;
+      let hovering = state.images.some(({ width, height, position, rotation }) => {
+        const halfW = width / 2;
+        const halfH = height / 2;
+        const angle = -rotation * Math.PI / 180;
+        const cos = Math.cos(angle);
+        const sin = Math.sin(angle);
+        const dx = texX - position.x;
+        const dy = texY - position.y;
+        const rotatedX = dx * cos - dy * sin;
+        const rotatedY = dx * sin + dy * cos;
+        return rotatedX > -halfW && rotatedX < halfW && rotatedY > -halfH && rotatedY < halfH;
+      }) || state.texts.some(({ content, scale, fontSize, position, rotation }) => {
+        const metrics = state.editorCtx.measureText(content);
+        const textW = metrics.width * scale;
+        const textH = fontSize * scale;
+        const halfW = textW / 2;
+        const halfH = textH / 2;
+        const angle = -rotation * Math.PI / 180;
+        const cos = Math.cos(angle);
+        const sin = Math.sin(angle);
+        const dx = texX - position.x;
+        const dy = texY - position.y;
+        const rotatedX = dx * cos - dy * sin;
+        const rotatedY = dx * sin + dy * cos;
+        return rotatedX > -halfW && rotatedX < halfW && rotatedY > -halfH && rotatedY < halfH;
+      });
+      canvas.style.cursor = hovering ? 'move' : 'default';
+    });
+  }
   setupViewSettings();
 };
-
-// View Settings Handlers
 const setupViewSettings = () => {
   const settings = {
     wireframe: document.getElementById('toggleWireframe'),
@@ -196,114 +243,95 @@ const setupViewSettings = () => {
     directionalLight: document.getElementById('toggleDirectionalLight'),
     spotlights: document.getElementById('toggleSpotlights'),
     modelVisibility: document.getElementById('toggleModelVisibility'),
-    backgroundColor: document.getElementById('backgroundColorPicker'), // Ensure this exists in your HTML
   };
-
-  // Wireframe Mode
-  settings.wireframe?.addEventListener('change', (e) => {
-    state.tshirtModel?.traverse((child) => {
-      if (child.isMesh) child.material.wireframe = e.target.checked;
-    });
-    showToast('View Settings', `Wireframe mode ${e.target.checked ? 'enabled' : 'disabled'}.`, 'info');
+  settings.wireframe?.addEventListener('change', e => {
+    state.tshirtModel?.traverse(child => child.isMesh && (child.material.wireframe = e.target.checked));
   });
-
-  // Grid Visibility
-  settings.grid?.addEventListener('change', (e) => {
+  settings.grid?.addEventListener('change', e => {
     if (!state.gridHelper) {
       state.gridHelper = new THREE.GridHelper(100, 100);
+      state.gridHelper.rotation.x = Math.PI / 2;
+      state.gridHelper.material.opacity = 0.5;
+      state.gridHelper.material.transparent = true;
       state.scene.add(state.gridHelper);
     }
     state.gridHelper.visible = e.target.checked;
-    showToast('View Settings', `Grid ${e.target.checked ? 'shown' : 'hidden'}.`, 'info');
   });
-
-  // Shadows
-  settings.shadows?.addEventListener('change', (e) => {
+  settings.shadows?.addEventListener('change', e => {
     state.renderer.shadowMap.enabled = e.target.checked;
-    state.tshirtModel?.traverse((child) => {
-      if (child.isMesh) {
-        child.castShadow = e.target.checked;
-        child.receiveShadow = e.target.checked;
-      }
-    });
-    state.lights.directional.castShadow = e.target.checked;
-    state.lights.point.castShadow = e.target.checked;
-    showToast('View Settings', `Shadows ${e.target.checked ? 'enabled' : 'disabled'}.`, 'info');
+    state.tshirtModel?.traverse(child => child.isMesh && (child.castShadow = child.receiveShadow = e.target.checked));
+    // state.lights.directional?.castShadow = e.target.checked;
+    // state.lights.point?.castShadow = e.target.checked;
   });
-
-  // Ambient Light
-  settings.ambientLight?.addEventListener('change', (e) => {
+  settings.ambientLight?.addEventListener('change', e => {
     state.lights.ambient.visible = e.target.checked;
-    showToast('View Settings', `Ambient Light ${e.target.checked ? 'enabled' : 'disabled'}.`, 'info');
   });
-
-  // Directional Light
-  settings.directionalLight?.addEventListener('change', (e) => {
+  settings.directionalLight?.addEventListener('change', e => {
     state.lights.directional.visible = e.target.checked;
-    showToast('View Settings', `Directional Light ${e.target.checked ? 'enabled' : 'disabled'}.`, 'info');
   });
-
-  // Spotlights
-  settings.spotlights?.addEventListener('change', (e) => {
-    if (!state.lights.spotlights) {
-      state.lights.spotlights = [];
-      for (let i = 0; i < 2; i++) { // Example: adding two spotlights
+  settings.spotlights?.addEventListener('change', e => {
+    if (!state.lights.spotlights && e.target.checked) {
+      state.lights.spotlights = Array.from({ length: 2 }, () => {
         const spot = new THREE.SpotLight(0xffffff, 0.5);
         spot.position.set(10, 20, 10);
         spot.castShadow = true;
         state.scene.add(spot);
-        state.lights.spotlights.push(spot);
-      }
+        return spot;
+      });
     }
-    state.lights.spotlights.forEach(spot => spot.visible = e.target.checked);
-    showToast('View Settings', `Spotlights ${e.target.checked ? 'enabled' : 'disabled'}.`, 'info');
+    state.lights.spotlights?.forEach(spot => (spot.visible = e.target.checked));
   });
-
-  // Model Visibility
-  settings.modelVisibility?.addEventListener('change', (e) => {
-    if (state.tshirtModel) state.tshirtModel.visible = e.target.checked;
-    showToast('View Settings', `Model visibility ${e.target.checked ? 'shown' : 'hidden'}.`, 'info');
-  });
-
-  // Background Color Picker
-  settings.backgroundColor?.addEventListener('input', (e) => {
-    state.scene.background.set(e.target.value);
-    showToast('View Settings', `Background color changed.`, 'info');
+  settings.modelVisibility?.addEventListener('change', e => {
+    state.tshirtModel.visible = e.target.checked;
   });
 };
-
-// Window Resize Handler
 const onWindowResize = () => {
-  const { modelContainer, camera, renderer } = state;
+  const { modelContainer, camera, renderer, camera2D, renderer2D } = state;
   camera.aspect = modelContainer.clientWidth / modelContainer.clientHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(modelContainer.clientWidth, modelContainer.clientHeight);
+  // const mesh2DCanvas = document.getElementById('mesh2DCanvas');
+  if (mesh2DCanvas && camera2D && renderer2D) {
+    renderer2D.setSize(mesh2DCanvas.clientWidth, mesh2DCanvas.clientHeight);
+    const aspect = mesh2DCanvas.clientWidth / mesh2DCanvas.clientHeight;
+    const viewSize = 50;
+    camera2D.left = -viewSize * aspect;
+    camera2D.right = viewSize * aspect;
+    camera2D.top = viewSize;
+    camera2D.bottom = -viewSize;
+    camera2D.updateProjectionMatrix();
+  }
+  resizeEditorCanvas();
 };
-
-// Animation Loop
+const resizeEditorCanvas = () => {
+  const { editorCanvas, textureCanvas } = state;
+  if (editorCanvas && textureCanvas) {
+    editorCanvas.width = 600;
+    editorCanvas.height = 800;
+    state.uvMapImage && state.editorCtx.drawImage(state.uvMapImage, 0, 0, editorCanvas.width, editorCanvas.height);
+    renderEditorCanvas();
+  }
+};
 const animate = () => {
   requestAnimationFrame(animate);
   if (state.isAnimating && state.tshirtModel) state.tshirtModel.rotation.y += 0.01;
   state.controls.update();
   state.renderer.render(state.scene, state.camera);
 };
-
-// Rendering Functions
+const animate2D = () => {
+  requestAnimationFrame(animate2D);
+  state.controls2D.update();
+  state.renderer2D.render(state.scene2D, state.camera2D);
+};
 const updateAllCanvases = () => {
   updateTexture();
   renderEditorCanvas();
 };
-
 const updateTexture = () => {
   const { textureCtx, textureCanvas, texts, images, colorPicker } = state;
   textureCtx.clearRect(0, 0, textureCanvas.width, textureCanvas.height);
-
-  // Base Color
-  const baseColor = colorPicker.value || '#ffffff';
-  textureCtx.fillStyle = baseColor;
+  textureCtx.fillStyle = colorPicker?.value || '#ffffff';
   textureCtx.fillRect(0, 0, textureCanvas.width, textureCanvas.height);
-
-  // Draw Texts
   texts.forEach(({ content, fontStyle, fontSize, fontFamily, color, align, position, scale, rotation }) => {
     textureCtx.save();
     textureCtx.font = `${fontStyle} ${fontSize}px ${fontFamily}`;
@@ -316,8 +344,6 @@ const updateTexture = () => {
     textureCtx.fillText(content, 0, 0);
     textureCtx.restore();
   });
-
-  // Draw Images
   images.forEach(({ image, width, height, position, scale, rotation }) => {
     textureCtx.save();
     textureCtx.translate(position.x, position.y);
@@ -326,74 +352,49 @@ const updateTexture = () => {
     textureCtx.drawImage(image, -width / 2, -height / 2, width, height);
     textureCtx.restore();
   });
-
   state.texture.needsUpdate = true;
 };
-
 const renderEditorCanvas = () => {
-  const { editorCtx, editorCanvas, textureCanvas, texts, images, selectedItem, gridHelper } = state;
-  const scaleFactor = textureCanvas.width / editorCanvas.width;
+  const { editorCtx, editorCanvas, texts, images, selectedItem } = state;
+  const scaleX = state.textureCanvas.width / editorCanvas.width;
+  const scaleY = state.textureCanvas.height / editorCanvas.height;
   editorCtx.clearRect(0, 0, editorCanvas.width, editorCanvas.height);
-
-  // Draw Grid if visible
-  if (gridHelper && gridHelper.visible) drawGrid(editorCtx, editorCanvas.width, editorCanvas.height);
-
-  // Draw Texts
+  state.uvMapImage && editorCtx.drawImage(state.uvMapImage, 0, 0, editorCanvas.width, editorCanvas.height);
+  state.gridHelper?.visible && drawGrid(editorCtx, editorCanvas.width, editorCanvas.height);
   texts.forEach((textObj, index) => {
-    const { content, fontStyle, fontSize, fontFamily, color, align, position, scale, rotation } = textObj;
     editorCtx.save();
-    editorCtx.font = `${fontStyle} ${fontSize / CONFIG.EDITOR_SCALE_FACTOR}px ${fontFamily}`;
-    editorCtx.fillStyle = color;
-    editorCtx.textAlign = align;
+    editorCtx.font = `${textObj.fontStyle} ${textObj.fontSize / scaleY}px ${textObj.fontFamily}`;
+    editorCtx.fillStyle = textObj.color;
+    editorCtx.textAlign = textObj.align;
     editorCtx.textBaseline = 'middle';
-    editorCtx.translate(position.x / scaleFactor, position.y / scaleFactor);
-    editorCtx.rotate((rotation * Math.PI) / 180);
-    editorCtx.scale(scale / CONFIG.EDITOR_SCALE_FACTOR, scale / CONFIG.EDITOR_SCALE_FACTOR);
-    editorCtx.fillText(content, 0, 0);
-
-    // Bounding Box if selected
+    editorCtx.translate(textObj.position.x / scaleX, textObj.position.y / scaleY);
+    editorCtx.rotate((textObj.rotation * Math.PI) / 180);
+    editorCtx.scale(textObj.scale, textObj.scale);
+    editorCtx.fillText(textObj.content, 0, 0);
     if (selectedItem?.type === 'text' && selectedItem.index === index) {
-      const metrics = editorCtx.measureText(content);
+      const metrics = editorCtx.measureText(textObj.content);
       const textWidth = metrics.width;
-      const textHeight = fontSize / CONFIG.EDITOR_SCALE_FACTOR;
+      const textHeight = textObj.fontSize / scaleY;
       editorCtx.strokeStyle = 'red';
       editorCtx.lineWidth = 1;
       editorCtx.strokeRect(-textWidth / 2, -textHeight / 2, textWidth, textHeight);
     }
     editorCtx.restore();
   });
-
-  // Draw Images
   images.forEach((imgObj, index) => {
-    const { image, width, height, position, scale, rotation } = imgObj;
     editorCtx.save();
-    editorCtx.translate(position.x / scaleFactor, position.y / scaleFactor);
-    editorCtx.rotate((rotation * Math.PI) / 180);
-    editorCtx.scale(scale / CONFIG.EDITOR_SCALE_FACTOR, scale / CONFIG.EDITOR_SCALE_FACTOR);
-    editorCtx.drawImage(
-      image,
-      -width / (2 * CONFIG.EDITOR_SCALE_FACTOR),
-      -height / (2 * CONFIG.EDITOR_SCALE_FACTOR),
-      width / CONFIG.EDITOR_SCALE_FACTOR,
-      height / CONFIG.EDITOR_SCALE_FACTOR
-    );
-
-    // Bounding Box if selected
+    editorCtx.translate(imgObj.position.x / scaleX, imgObj.position.y / scaleY);
+    editorCtx.rotate((imgObj.rotation * Math.PI) / 180);
+    editorCtx.scale(imgObj.scale, imgObj.scale);
+    editorCtx.drawImage(imgObj.image, -imgObj.width / (2 * scaleX), -imgObj.height / (2 * scaleY), imgObj.width / scaleX, imgObj.height / scaleY);
     if (selectedItem?.type === 'image' && selectedItem.index === index) {
       editorCtx.strokeStyle = 'red';
       editorCtx.lineWidth = 1;
-      editorCtx.strokeRect(
-        -width / (2 * CONFIG.EDITOR_SCALE_FACTOR),
-        -height / (2 * CONFIG.EDITOR_SCALE_FACTOR),
-        width / CONFIG.EDITOR_SCALE_FACTOR,
-        height / CONFIG.EDITOR_SCALE_FACTOR
-      );
+      editorCtx.strokeRect(-imgObj.width / (2 * scaleX), -imgObj.height / (2 * scaleY), imgObj.width / scaleX, imgObj.height / scaleY);
     }
     editorCtx.restore();
   });
 };
-
-// Draw Grid on Editor Canvas
 const drawGrid = (ctx, width, height, gridSize = 50) => {
   ctx.strokeStyle = '#e0e0e0';
   ctx.lineWidth = 1;
@@ -410,12 +411,8 @@ const drawGrid = (ctx, width, height, gridSize = 50) => {
     ctx.stroke();
   }
 };
-
-// Interaction Functions
 const addText = (content, fontSize) => {
-  if (state.texts.length >= CONFIG.MAX_TEXTS) return showToast('Limit Reached', `Maximum of ${CONFIG.MAX_TEXTS} texts allowed.`, 'warning');
-  if (!content.trim()) return showToast('Invalid Input', 'Text content cannot be empty.', 'warning');
-
+  if (state.texts.length >= CONFIG.MAX_TEXTS || !content.trim()) return;
   state.texts.push({
     id: Date.now(),
     content,
@@ -429,24 +426,20 @@ const addText = (content, fontSize) => {
     rotation: 0,
   });
   updateAllCanvases();
-  showToast('Success', 'Text added successfully!', 'success');
 };
-
-const addImage = (file) => {
-  if (state.images.length >= CONFIG.MAX_IMAGES) return showToast('Limit Reached', `Maximum of ${CONFIG.MAX_IMAGES} images allowed.`, 'warning');
-  if (!file.type.startsWith('image/')) return showToast('Invalid File', 'Please upload a valid image file.', 'warning');
-
+const addImage = file => {
+  if (state.images.length >= CONFIG.MAX_IMAGES || !file.type.startsWith('image/')) return;
   const reader = new FileReader();
-  reader.onload = (e) => {
+  reader.onload = e => {
     const img = new Image();
     img.src = e.target.result;
     img.onload = () => {
-      const maxDim = 300;
       let { width, height } = img;
+      const maxDim = 300;
       if (width > maxDim || height > maxDim) {
         const aspect = width / height;
-        if (aspect > 1) { width = maxDim; height = maxDim / aspect; }
-        else { height = maxDim; width = maxDim * aspect; }
+        width = aspect > 1 ? maxDim : maxDim * aspect;
+        height = aspect > 1 ? maxDim / aspect : maxDim;
       }
       state.images.push({
         id: Date.now(),
@@ -458,235 +451,187 @@ const addImage = (file) => {
         rotation: 0,
       });
       updateAllCanvases();
-      showToast('Success', 'Image added successfully!', 'success');
     };
-    img.onerror = () => showToast('Error', 'Failed to load image.', 'danger');
   };
-  reader.onerror = () => showToast('Error', 'Failed to read image file.', 'danger');
   reader.readAsDataURL(file);
 };
-
 const toggleAnimation = () => {
   state.isAnimating = !state.isAnimating;
   const btn = document.getElementById('animateBtn');
-  if (btn) {
-    btn.innerHTML = state.isAnimating
-      ? '<i class="bi bi-pause-circle"></i> Stop'
-      : '<i class="bi bi-play-circle"></i> Animate';
-    showToast('Animation', state.isAnimating ? 'Animation started.' : 'Animation stopped.', 'info');
-  }
+  btn && (btn.innerHTML = state.isAnimating ? '<i class="bi bi-pause-circle"></i> Stop' : '<i class="bi bi-play-circle"></i> Animate');
 };
-
 const deleteSelectedItem = () => {
   const { selectedItem, texts, images } = state;
   if (!selectedItem) return;
-
-  if (selectedItem.type === 'text') {
-    texts.splice(selectedItem.index, 1);
-    showToast('Deleted', 'Selected text has been deleted.', 'info');
-  } else if (selectedItem.type === 'image') {
-    images.splice(selectedItem.index, 1);
-    showToast('Deleted', 'Selected image has been deleted.', 'info');
-  }
-
+  selectedItem.type === 'text' ? texts.splice(selectedItem.index, 1) : images.splice(selectedItem.index, 1);
   state.selectedItem = null;
   updateAllCanvases();
   updatePropertiesPanel();
 };
-
-// Editor Canvas Event Handlers
-const onCanvasMouseDown = (e) => {
+const onCanvasMouseDown = e => {
   const { editorCanvas, editorCtx, images, texts } = state;
   const rect = editorCanvas.getBoundingClientRect();
   const mouseX = e.clientX - rect.left;
   const mouseY = e.clientY - rect.top;
-  const scaleFactor = CONFIG.TEXTURE_SIZE / editorCanvas.width;
-
-  const isInside = (x, y, obj) => {
-    const angle = -obj.rotation * Math.PI / 180;
-    const cos = Math.cos(angle);
-    const sin = Math.sin(angle);
-    const dx = x - obj.position.x / scaleFactor;
-    const dy = y - obj.position.y / scaleFactor;
-    const rotatedX = dx * cos - dy * sin;
-    const rotatedY = dx * sin + dy * cos;
-    const halfW = (obj.width || editorCtx.measureText(obj.content).width) * obj.scale / (2 * CONFIG.EDITOR_SCALE_FACTOR);
-    const halfH = (obj.height || obj.fontSize) * obj.scale / (2 * CONFIG.EDITOR_SCALE_FACTOR);
-    return rotatedX > -halfW && rotatedX < halfW && rotatedY > -halfH && rotatedY < halfH;
-  };
-
-  // Check Images First
+  const scaleX = state.textureCanvas.width / editorCanvas.width;
+  const scaleY = state.textureCanvas.height / editorCanvas.height;
+  const texX = mouseX * scaleX;
+  const texY = mouseY * scaleY;
+  let found = false;
   for (let i = images.length - 1; i >= 0; i--) {
-    if (isInside(mouseX, mouseY, images[i])) {
+    const { width, height, position, rotation } = images[i];
+    const halfW = width / 2, halfH = height / 2;
+    const angle = -rotation * Math.PI / 180, cos = Math.cos(angle), sin = Math.sin(angle);
+    const dx = texX - position.x, dy = texY - position.y;
+    const rotatedX = dx * cos - dy * sin, rotatedY = dx * sin + dy * cos;
+    if (rotatedX > -halfW && rotatedX < halfW && rotatedY > -halfH && rotatedY < halfH) {
       state.isDragging = true;
       state.dragTarget = { type: 'image', index: i };
-      state.dragOffset = { x: images[i].position.x / scaleFactor - mouseX, y: images[i].position.y / scaleFactor - mouseY };
+      state.dragOffset = { x: position.x - texX, y: position.y - texY };
       state.selectedItem = { type: 'image', index: i };
       updatePropertiesPanel();
-      showToast('Selected', 'Image selected for editing.', 'info');
-      return;
+      found = true;
+      break;
     }
   }
-
-  // Check Texts Next
-  for (let i = texts.length - 1; i >= 0; i--) {
-    const text = texts[i];
-    const textWidth = editorCtx.measureText(text.content).width * text.scale / CONFIG.EDITOR_SCALE_FACTOR;
-    const textHeight = text.fontSize * text.scale / CONFIG.EDITOR_SCALE_FACTOR;
-    const textX = text.position.x / scaleFactor;
-    const textY = text.position.y / scaleFactor;
-
-    if (mouseX > textX - textWidth / 2 && mouseX < textX + textWidth / 2 &&
-        mouseY > textY - textHeight / 2 && mouseY < textY + textHeight / 2) {
-      state.isDragging = true;
-      state.dragTarget = { type: 'text', index: i };
-      state.dragOffset = { x: textX - mouseX, y: textY - mouseY };
-      state.selectedItem = { type: 'text', index: i };
-      updatePropertiesPanel();
-      showToast('Selected', 'Text selected for editing.', 'info');
-      return;
+  if (!found) {
+    for (let i = texts.length - 1; i >= 0; i--) {
+      const { content, scale, fontSize, position, rotation } = texts[i];
+      const metrics = editorCtx.measureText(content);
+      const textW = metrics.width * scale, textH = fontSize * scale;
+      const halfW = textW / 2, halfH = textH / 2;
+      const angle = -rotation * Math.PI / 180, cos = Math.cos(angle), sin = Math.sin(angle);
+      const dx = texX - position.x, dy = texY - position.y;
+      const rotatedX = dx * cos - dy * sin, rotatedY = dx * sin + dy * cos;
+      if (rotatedX > -halfW && rotatedX < halfW && rotatedY > -halfH && rotatedY < halfH) {
+        state.isDragging = true;
+        state.dragTarget = { type: 'text', index: i };
+        state.dragOffset = { x: position.x - texX, y: position.y - texY };
+        state.selectedItem = { type: 'text', index: i };
+        updatePropertiesPanel();
+        break;
+      }
     }
   }
-
-  // If No Selection
-  state.selectedItem = null;
-  updatePropertiesPanel();
+  if (!found && !state.selectedItem) updatePropertiesPanel();
 };
-
-const onCanvasMouseMove = (e) => {
+const onCanvasMouseMove = e => {
   if (!state.isDragging || !state.dragTarget) return;
   const { editorCanvas, dragOffset, dragTarget } = state;
   const rect = editorCanvas.getBoundingClientRect();
   const mouseX = e.clientX - rect.left;
   const mouseY = e.clientY - rect.top;
-  const scaleFactor = CONFIG.TEXTURE_SIZE / editorCanvas.width;
-  const newX = (mouseX + dragOffset.x) * scaleFactor;
-  const newY = (mouseY + dragOffset.y) * scaleFactor;
-
-  if (dragTarget.type === 'image') {
-    state.images[dragTarget.index].position = { x: newX, y: newY };
-  } else if (dragTarget.type === 'text') {
-    state.texts[dragTarget.index].position = { x: newX, y: newY };
-  }
-
+  const scaleX = state.textureCanvas.width / editorCanvas.width;
+  const scaleY = state.textureCanvas.height / editorCanvas.height;
+  const newX = mouseX * scaleX + dragOffset.x;
+  const newY = mouseY * scaleY + dragOffset.y;
+  dragTarget.type === 'image'
+    ? (state.images[dragTarget.index].position = { x: newX, y: newY })
+    : (state.texts[dragTarget.index].position = { x: newX, y: newY });
   updateAllCanvases();
 };
-
 const onCanvasMouseUp = () => {
   state.isDragging = false;
   state.dragTarget = null;
 };
-
-// Properties Panel Update
 const updatePropertiesPanel = () => {
-  const panel = document.getElementById('propertiesPanel');
-  if (!panel) return showToast('Error', 'Properties panel not found!', 'danger');
-
-  const { selectedItem, texts, images } = state;
-  if (!selectedItem) {
-    panel.innerHTML = '<p>Select an element to edit its properties.</p>';
-    return;
-  }
-
-  const item = selectedItem.type === 'text' ? texts[selectedItem.index] : images[selectedItem.index];
-  if (!item) {
-    panel.innerHTML = '<p>Select an element to edit its properties.</p>';
-    return;
-  }
-
-  // Generate HTML based on item type
-  panel.innerHTML = `
-    <h5 class="mb-3">Edit Properties</h5>
-    ${selectedItem.type === 'text' ? `
-      <div class="mb-3">
-        <label for="propContent" class="form-label">Text Content:</label>
-        <input type="text" id="propContent" value="${sanitizeHTML(item.content)}" class="form-control" placeholder="Enter text">
-      </div>
-      <div class="mb-3">
-        <label for="propFontSize" class="form-label">Font Size:</label>
-        <input type="number" id="propFontSize" value="${item.fontSize}" class="form-control" min="10" max="100">
-      </div>
-      <div class="mb-3">
-        <label for="propColor" class="form-label">Color:</label>
-        <input type="color" id="propColor" value="${item.color}" class="form-control form-control-color" title="Choose text color">
-      </div>
-    ` : `
-      <div class="mb-3">
-        <p>Image can be repositioned by dragging on the canvas or adjusted using the sliders below.</p>
-      </div>
-    `}
-    <div class="mb-3">
-      <label for="propScale" class="form-label">Scale:</label>
-      <input type="range" id="propScale" min="0.1" max="5" step="0.1" value="${item.scale}" class="form-range">
-    </div>
-    <div class="mb-3">
-      <label for="propRotation" class="form-label">Rotation:</label>
-      <input type="range" id="propRotation" min="0" max="360" step="1" value="${item.rotation}" class="form-range">
-    </div>
-    <button id="deleteItemBtn" class="btn btn-danger w-100">
-      <i class="bi bi-trash me-2"></i> Delete
-    </button>
-  `;
-
-  // Event Listeners
-  if (selectedItem.type === 'text') {
-    document.getElementById('propContent')?.addEventListener('input', (e) => {
-      item.content = e.target.value;
-      updateAllCanvases();
-    });
-    document.getElementById('propFontSize')?.addEventListener('input', (e) => {
-      item.fontSize = parseInt(e.target.value, 10) || item.fontSize;
-      updateAllCanvases();
-    });
-    document.getElementById('propColor')?.addEventListener('input', (e) => {
-      item.color = e.target.value;
-      updateAllCanvases();
-    });
-  }
-
-  document.getElementById('propScale')?.addEventListener('input', (e) => {
-    item.scale = parseFloat(e.target.value) || item.scale;
-    updateAllCanvases();
+  const textsList = document.getElementById('textsList');
+  const imagesList = document.getElementById('imagesList');
+  const editPanel = document.getElementById('editProperties');
+  if (!textsList || !imagesList || !editPanel) return;
+  textsList.innerHTML = '';
+  imagesList.innerHTML = '';
+  state.texts.forEach((text, index) => {
+    const li = document.createElement('li');
+    li.className = `list-group-item list-group-item-action ${state.selectedItem?.type === 'text' && state.selectedItem.index === index ? 'active' : ''}`;
+    li.textContent = `Text ${index + 1}: ${text.content}`;
+    li.style.cursor = 'pointer';
+    li.onclick = () => {
+      state.selectedItem = { type: 'text', index };
+      updateEditProperties();
+      updatePropertiesPanel();
+    };
+    textsList.appendChild(li);
   });
-
-  document.getElementById('propRotation')?.addEventListener('input', (e) => {
-    item.rotation = parseFloat(e.target.value) || item.rotation;
-    updateAllCanvases();
+  state.images.forEach((image, index) => {
+    const li = document.createElement('li');
+    li.className = `list-group-item list-group-item-action ${state.selectedItem?.type === 'image' && state.selectedItem.index === index ? 'active' : ''}`;
+    li.textContent = `Image ${index + 1}`;
+    li.style.cursor = 'pointer';
+    li.onclick = () => {
+      state.selectedItem = { type: 'image', index };
+      updateEditProperties();
+      updatePropertiesPanel();
+    };
+    imagesList.appendChild(li);
   });
-
-  document.getElementById('deleteItemBtn')?.addEventListener('click', deleteSelectedItem);
+  updateEditProperties();
 };
-
-// Utility Functions
-const showToast = (title, message, type = 'info') => {
-  const toastContainer = document.getElementById('toastContainer');
-  if (!toastContainer) return console.error('Toast container not found!');
-
-  const toastEl = document.createElement('div');
-  toastEl.className = `toast align-items-center text-bg-${type} border-0`;
-  toastEl.setAttribute('role', 'alert');
-  toastEl.setAttribute('aria-live', 'assertive');
-  toastEl.setAttribute('aria-atomic', 'true');
-
-  toastEl.innerHTML = `
-    <div class="d-flex">
-      <div class="toast-body">
-        <strong>${title}:</strong> ${message}
-      </div>
-      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
-    </div>
-  `;
-
-  toastContainer.appendChild(toastEl);
-  new bootstrap.Toast(toastEl, { delay: 3000 }).show();
-  toastEl.addEventListener('hidden.bs.toast', () => toastEl.remove());
+const updateEditProperties = () => {
+  const editPanel = document.getElementById('editProperties');
+  if (!editPanel) return;
+  editPanel.innerHTML = state.selectedItem
+    ? state.selectedItem.type === 'text'
+      ? `
+        <h5>Edit Text</h5>
+        <div class="form-group mb-2">
+          <label for="editTextContent">Content</label>
+          <input type="text" id="editTextContent" class="form-control" value="${sanitizeHTML(state.texts[state.selectedItem.index].content)}">
+        </div>
+        <div class="form-group mb-2">
+          <label for="editFontSize">Font Size</label>
+          <input type="range" id="editFontSize" class="form-range" min="10" max="100" value="${state.texts[state.selectedItem.index].fontSize}">
+        </div>
+        <div class="form-group mb-2">
+          <label for="editTextColor">Color</label>
+          <input type="color" id="editTextColor" class="form-control form-control-color" value="${state.texts[state.selectedItem.index].color}" title="Choose text color">
+        </div>
+        <button id="saveTextBtn" class="btn btn-primary w-100">Save</button>
+      `
+      : `
+        <h5>Edit Image</h5>
+        <p>Drag the image on the editor canvas to reposition.</p>
+        <div class="form-group mb-2">
+          <label for="editImageRotation">Rotation</label>
+          <input type="range" id="editImageRotation" class="form-range" min="0" max="360" value="${state.images[state.selectedItem.index].rotation}">
+        </div>
+        <div class="form-group mb-2">
+          <label for="editImageScale">Scale</label>
+          <input type="range" id="editImageScale" class="form-range" min="0.5" max="2" step="0.1" value="${state.images[state.selectedItem.index].scale}">
+        </div>
+        <button id="saveImageBtn" class="btn btn-primary w-100">Save</button>
+        <button id="duplicateImageBtn" class="btn btn-secondary w-100 mt-2">Duplicate</button>
+      `
+    : '<p>Select an element to edit its properties.</p>';
+  if (state.selectedItem) {
+    if (state.selectedItem.type === 'text') {
+      document.getElementById('saveTextBtn')?.addEventListener('click', () => {
+        const newContent = document.getElementById('editTextContent').value.trim();
+        const newFontSize = parseInt(document.getElementById('editFontSize').value, 10);
+        const newColor = document.getElementById('editTextColor').value;
+        if (newContent) {
+          Object.assign(state.texts[state.selectedItem.index], { content: newContent, fontSize: newFontSize, color: newColor });
+          updateAllCanvases();
+        }
+      });
+    } else if (state.selectedItem.type === 'image') {
+      document.getElementById('saveImageBtn')?.addEventListener('click', () => {
+        const newRotation = parseInt(document.getElementById('editImageRotation').value, 10);
+        const newScale = parseFloat(document.getElementById('editImageScale').value);
+        Object.assign(state.images[state.selectedItem.index], { rotation: newRotation, scale: newScale });
+        updateAllCanvases();
+      });
+      document.getElementById('duplicateImageBtn')?.addEventListener('click', () => {
+        const img = state.images[state.selectedItem.index];
+        state.images.push({ ...img, id: Date.now(), position: { ...img.position } });
+        updateAllCanvases();
+      });
+    }
+  }
 };
-
-const sanitizeHTML = (str) => {
+const sanitizeHTML = str => {
   const temp = document.createElement('div');
   temp.textContent = str;
   return temp.innerHTML;
 };
-
-// Start Initialization on DOM Content Loaded
 document.addEventListener('DOMContentLoaded', init);
