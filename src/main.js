@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 const CONFIG = {
-  MODEL_PATH: 'src/models/jersey.glb',
+  MODEL_PATH: '/models/jersey.glb',
   MAX_TEXTS: 4,
   MAX_IMAGES: 3,
   TEXTURE_SIZE: 1024,
@@ -86,7 +86,7 @@ const init = () => {
 };
 const loadUVMap = () => {
   const uvMapImage = new Image();
-  uvMapImage.src = 'src/models/UV.png';
+  uvMapImage.src = '/models/UV.png';
   uvMapImage.onload = () => {
     state.uvMapImage = uvMapImage;
     renderEditorCanvas();
